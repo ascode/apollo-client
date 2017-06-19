@@ -3,6 +3,7 @@ import {
   getDefaultValues,
   getOperationDefinition,
   getQueryDefinition,
+  getOperationName,
   FragmentMap,
   getFragmentDefinitions,
   createFragmentMap,
@@ -122,6 +123,7 @@ export function writeQueryToStore({
         fragmentMap,
         fragmentMatcherFunction,
       },
+      operationName: getOperationName(query),
     });
   } catch (e) {
     throw enhanceErrorWithDocument(e, query);
@@ -173,6 +175,7 @@ export function writeResultToStore({
         fragmentMap,
         fragmentMatcherFunction,
       },
+      operationName: getOperationName(document),
     });
   } catch (e) {
     throw enhanceErrorWithDocument(e, document);
@@ -184,11 +187,13 @@ export function writeSelectionSetToStore({
   dataId,
   selectionSet,
   context,
+  operationName = null,
 }: {
-  dataId: string,
   result: any,
+  dataId: string,
   selectionSet: SelectionSetNode,
   context: WriteContext,
+  operationName?: String | null,
 }): NormalizedCache {
   const { variables, store, dataIdFromObject, fragmentMap } = context;
 
@@ -206,14 +211,17 @@ export function writeSelectionSetToStore({
             value,
             field: selection,
             context,
+            operationName,
           });
         } else {
           if (context.fragmentMatcherFunction) {
             // XXX We'd like to throw an error, but for backwards compatibility's sake
             // we just print a warning for the time being.
-            //throw new WriteError(`Missing field ${resultFieldKey} in ${JSON.stringify(result)}`);
+            //throw new WriteError(message);
             if (!isProduction()) {
-              console.warn(`Missing field ${resultFieldKey} in ${JSON.stringify(result)}`);
+              let message = `Missing field ${resultFieldKey} in ${JSON.stringify(result, null, 2).substring(0, 100)}`;
+              message = operationName ? `${operationName}: ${message}` : message;
+              console.warn(message);
             }
           }
         }
@@ -261,6 +269,7 @@ export function writeSelectionSetToStore({
           selectionSet: fragment.selectionSet,
           dataId,
           context,
+          operationName,
         });
       }
     }
@@ -298,11 +307,13 @@ function writeFieldToStore({
   value,
   dataId,
   context,
+  operationName = null,
 }: {
   field: FieldNode,
   value: any,
   dataId: string,
   context: WriteContext,
+  operationName: String | null,
 }) {
   const { variables, dataIdFromObject, store, fragmentMap } = context;
 
@@ -326,7 +337,7 @@ function writeFieldToStore({
   } else if (Array.isArray(value)) {
     const generatedId = `${dataId}.${storeFieldName}`;
 
-    storeValue = processArrayValue(value, generatedId, field.selectionSet, context);
+    storeValue = processArrayValue(value, generatedId, field.selectionSet, context, operationName);
   } else {
     // It's an object
     let valueDataId = `${dataId}.${storeFieldName}`;
@@ -360,6 +371,7 @@ function writeFieldToStore({
       result: value,
       selectionSet: field.selectionSet,
       context,
+      operationName,
     });
 
     // We take the id and escape it (i.e. wrap it with an enclosing object).
@@ -410,6 +422,7 @@ function processArrayValue(
   generatedId: string,
   selectionSet: SelectionSetNode,
   context: WriteContext,
+  operationName: String | null,
 ): any[] {
   return value.map((item: any, index: any) => {
     if (item === null) {
@@ -419,7 +432,7 @@ function processArrayValue(
     let itemDataId = `${generatedId}.${index}`;
 
     if (Array.isArray(item)) {
-      return processArrayValue(item, itemDataId, selectionSet, context);
+      return processArrayValue(item, itemDataId, selectionSet, context, operationName);
     }
 
     let generated = true;
@@ -438,6 +451,7 @@ function processArrayValue(
       result: item,
       selectionSet,
       context,
+      operationName,
     });
 
     const idStoreValue: IdValue = {

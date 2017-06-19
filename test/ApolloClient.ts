@@ -500,10 +500,10 @@ describe('ApolloClient', () => {
             ],
           },
           query: gql`
-            query { todos { id name description } }
+            query operationName { todos { id name description } }
           `,
         });
-      }, /Missing field description/);
+      }, /operationName: Missing field description/);
     });
   });
 
